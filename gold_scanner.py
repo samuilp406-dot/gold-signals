@@ -6,11 +6,14 @@ Rules (same as the backtest, New York session only):
  5) Only setups whose MSS candle closes 12:00-16:59 UTC, Mon-Fri. Pending order valid 60 min."""
 import json, os, sys, time, datetime as dt
 import urllib.request
+try: sys.stdout.reconfigure(line_buffering=True)
+except Exception: pass
 
 RISK_USD = float(os.environ.get('RISK_USD', 15))
 OZ_PER_LOT = 100.0
 W_HOURS, SCAN, ENT, BUF, MINSTOP, MINRR, FILLMAX, HOLD = 2, 120, 0.5, 0.00005, 0.0003, 1.5, 60, 480
 ENTRY_H0, ENTRY_H1 = 12, 17
+LAST_ERR_NOTE = 0
 STATE_FILE = os.environ.get('GOLD_STATE', 'gold_state.json')
 NTFY_TOPIC = os.environ.get('NTFY_TOPIC', '')
 MIN = 60000
@@ -21,36 +24,54 @@ def http_json(url, timeout=20):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode())
 
+def _rows(rows):
+    return sorted(((int(t), float(o), float(h), float(l), float(c)) for t, o, h, l, c in rows), key=lambda r: r[0])
+
+def src_binance(now):
+    j = http_json('https://fapi.binance.com/fapi/v1/klines?symbol=XAUUSDT&interval=1m&limit=480')
+    return _rows([(r[0], r[1], r[2], r[3], r[4]) for r in j if int(r[0]) + MIN <= now])
+
+def src_bybit(now):
+    j = http_json('https://api.bybit.com/v5/market/kline?category=linear&symbol=XAUUSDT&interval=1&limit=480')
+    return _rows([(r[0], r[1], r[2], r[3], r[4]) for r in j['result']['list'] if int(r[0]) + MIN <= now])
+
+def src_okx(now):
+    out, after = [], ''
+    for _ in range(2):
+        j = http_json('https://www.okx.com/api/v5/market/candles?instId=XAUT-USDT-SWAP&bar=1m&limit=300' + after)
+        if not j.get('data'): break
+        out += [r for r in j['data'] if r[8] == '1']
+        after = '&after=' + j['data'][-1][0]
+    return _rows(list({r[0]: (r[0], r[1], r[2], r[3], r[4]) for r in out}.values()))
+
+def src_hyperliquid(now):
+    body = json.dumps({'type': 'candleSnapshot', 'req': {'coin': 'PAXG', 'interval': '1m', 'startTime': now - 500 * MIN, 'endTime': now}}).encode()
+    req = urllib.request.Request('https://api.hyperliquid.xyz/info', data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'gold-scanner'})
+    j = json.loads(urllib.request.urlopen(req, timeout=20).read().decode())
+    return _rows([(r['t'], r['o'], r['h'], r['l'], r['c']) for r in j if int(r['T']) <= now])
+
+def src_kraken(now):
+    j = http_json('https://api.kraken.com/0/public/OHLC?pair=PAXGUSD&interval=1')
+    key = [k for k in j['result'] if k != 'last'][0]
+    return _rows([(int(r[0]) * 1000, r[1], r[2], r[3], r[4]) for r in j['result'][key] if int(r[0]) * 1000 + MIN <= now])
+
+def src_coinbase(now):
+    j = http_json('https://api.exchange.coinbase.com/products/PAXG-USD/candles?granularity=60')
+    return _rows([(int(r[0]) * 1000, r[3], r[2], r[1], r[4]) for r in j if int(r[0]) * 1000 + MIN <= now])
+
+SOURCES = [('binance XAUUSDT', src_binance), ('bybit XAUUSDT', src_bybit), ('okx XAUT-USDT', src_okx),
+           ('hyperliquid PAXG', src_hyperliquid), ('kraken PAXGUSD', src_kraken), ('coinbase PAXG-USD', src_coinbase)]
+
 def fetch_bars():
-    """Closed 1m bars, oldest first, as (open_ms, o, h, l, c). Tries several exchanges."""
+    """Closed 1m bars, oldest first, as (open_ms, o, h, l, c). Tries several exchanges, remembers all errors."""
     errs, now = [], int(time.time() * 1000)
-    try:
-        j = http_json('https://fapi.binance.com/fapi/v1/klines?symbol=XAUUSDT&interval=1m&limit=480')
-        bars = [(int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])) for r in j if int(r[0]) + MIN <= now]
-        if len(bars) >= 200: return bars, 'binance XAUUSDT'
-    except Exception as e: errs.append(f'binance {e}')
-    try:
-        j = http_json('https://api.bybit.com/v5/market/kline?category=linear&symbol=XAUUSDT&interval=1&limit=480')
-        rows = [r for r in j['result']['list'] if int(r[0]) + MIN <= now]
-        bars = [(int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])) for r in reversed(rows)]
-        if len(bars) >= 200: return bars, 'bybit XAUUSDT'
-    except Exception as e: errs.append(f'bybit {e}')
-    try:
-        out = []
-        after = ''
-        for _ in range(2):
-            j = http_json('https://www.okx.com/api/v5/market/candles?instId=XAUT-USDT-SWAP&bar=1m&limit=300' + after)
-            rows = [r for r in j['data'] if r[8] == '1']
-            out += rows
-            if not j['data']: break
-            after = '&after=' + j['data'][-1][0]
-        seen, bars = set(), []
-        for r in sorted(out, key=lambda r: int(r[0])):
-            if r[0] in seen: continue
-            seen.add(r[0]); bars.append((int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4])))
-        if len(bars) >= 200: return bars, 'okx XAUT-USDT'
-    except Exception as e: errs.append(f'okx {e}')
-    raise RuntimeError('; '.join(errs))
+    for name, fn in SOURCES:
+        try:
+            bars = fn(now)
+            if len(bars) >= 200: return bars, name
+            errs.append(f'{name}: only {len(bars)} bars')
+        except Exception as e: errs.append(f'{name}: {str(e)[:70]}')
+    raise RuntimeError(' | '.join(errs))
 
 # ---------------------------------------------------------------- strategy (mirror of the backtest)
 def prep(o, h, l, c, n=3):
@@ -233,10 +254,11 @@ def run_once():
         bars, src = fetch_bars()
     except Exception as e:
         lines.append(f'data error: {str(e)[:300]}'); text = '\n'.join(lines); print(text); open('gold_latest.txt', 'w').write(text + '\n')
-        if state.get('_err') != now.strftime('%Y-%m-%d %H') and now.weekday() < 5 and 12 <= now.hour < 18:
-            notify('Gold scanner problem', 'Не успях да взема данни за златото. Виж GitHub Actions.', 'default'); state['_err'] = now.strftime('%Y-%m-%d %H')
-            json.dump(state, open(STATE_FILE, 'w'), indent=1)
-        return True
+        global LAST_ERR_NOTE
+        if time.time() - LAST_ERR_NOTE > 1800:
+            LAST_ERR_NOTE = time.time()
+            notify('Gold scanner problem', 'Не успях да взема данни за златото. ' + str(e)[:700], 'default')
+        return None
     lines.append(f'source: {src}; last closed bar {dt.datetime.fromtimestamp(bars[-1][0]/1000, dt.timezone.utc):%H:%M} UTC close {px(bars[-1][4])}')
     notes = process(bars, state)
     act = [v for v in state.get('signals', {}).values() if v['status'] != 'closed']
@@ -269,11 +291,15 @@ def loop():
     start = dt.datetime.now(dt.timezone.utc)
     extend = (start.hour, start.minute) >= (17, 30)
     until = start.replace(hour=17, minute=40, second=0, microsecond=0) if not extend else start.replace(hour=23, minute=55, second=0, microsecond=0)
-    last_push = time.time(); active = False
+    last_push = time.time(); active = False; errors = 0
     while True:
-        try: active = run_once()
-        except Exception as e: print('scan error', repr(e)[:200])
+        try:
+            r = run_once()
+            if r is None: errors += 1; active = True
+            else: errors = 0; active = r
+        except Exception as e: print('scan error', repr(e)[:200]); errors += 1
         now = dt.datetime.now(dt.timezone.utc)
+        if extend and errors >= 3: print('too many errors, stopping'); break
         if time.time() - last_push > 900: git_push(); last_push = time.time()
         if now >= until or (extend and not active and now.hour >= 17): break
         time.sleep(max(1, 65 - now.second) if now.second < 65 else 1)
