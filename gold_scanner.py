@@ -13,6 +13,7 @@ RISK_USD = float(os.environ.get('RISK_USD', 15))
 OZ_PER_LOT = 100.0
 W_HOURS, SCAN, ENT, BUF, MINSTOP, MINRR, FILLMAX, HOLD = 2, 120, 0.5, 0.00005, 0.0003, 1.5, 60, 480
 ENTRY_H0, ENTRY_H1 = 12, 17
+BE_R = float(os.environ.get('BE_R', 2))   # move stop to entry after +BE_R x risk (0 = off)
 LAST_ERR_NOTE = 0
 STATE_FILE = os.environ.get('GOLD_STATE', 'gold_state.json')
 NTFY_TOPIC = os.environ.get('NTFY_TOPIC', '')
@@ -161,13 +162,17 @@ def advance(sg, bars):
             if tp_hit: sg['status'] = 'closed'; sg['result'] = 'cancel_target'; ev.append(('CANCEL_TARGET', t, sg['tp']))
             elif (t - sg['k_ts']) // MIN >= FILLMAX: sg['status'] = 'closed'; sg['result'] = 'cancel_expired'; ev.append(('CANCEL_EXPIRED', t, c))
         elif sg['status'] == 'open':
-            if stop_hit: sg['status'] = 'closed'; sg['result'] = 'sl'; ev.append(('STOP', t, sg['stop']))
+            if stop_hit:
+                sg['status'] = 'closed'; sg['result'] = 'be' if sg.get('be') else 'sl'
+                ev.append(('STOP_BE' if sg.get('be') else 'STOP', t, sg['stop']))
             elif tp_hit: sg['status'] = 'closed'; sg['result'] = 'tp'; ev.append(('TP', t, sg['tp']))
             elif (t - sg['fill_t']) // MIN >= HOLD: sg['status'] = 'closed'; sg['result'] = 'timeout'; ev.append(('TIMEOUT', t, c))
+            elif BE_R > 0 and not sg.get('be') and ((l <= sg['entry'] - BE_R * sg['risk']) if S else (h >= sg['entry'] + BE_R * sg['risk'])):
+                sg['be'] = True; sg['stop'] = sg['entry']; ev.append(('BE', t, sg['entry']))
     return ev
 
 def new_signal(cand, bars):
-    return dict(cand, status='pending', checked=cand['k_ts'], fill_t=0, result='', notified=False, created=int(time.time()))
+    return dict(cand, status='pending', checked=cand['k_ts'], fill_t=0, result='', risk=abs(cand['stop'] - cand['entry']), be=False, notified=False, created=int(time.time()))
 
 def process(bars, state):
     """Core step: mutate state, return list of (title, body) notifications."""
@@ -223,6 +228,7 @@ def msg_enter(sg, last):
             f"ЦЕЛ (TP): {px(sg['tp'])}  (RR {sg['rr']:.1f})\n"
             f"Размер {size}\n"
             f"Цена сега: {px(last)}\n"
+            + (f"При +{BE_R:g}R (~${RISK_USD * BE_R:.0f} печалба, цена {px(sg['entry'] - BE_R * dist) if S else px(sg['entry'] + BE_R * dist)}) ще те уведомя да преместиш стопа на входа.\n" if BE_R > 0 else '') +
             f"Валидна до {bg(until)} (БГ). Изтрий поръчката, ако цената стигне ЦЕЛТА преди да влезе или мине времето.")
     return title, body
 
@@ -231,6 +237,8 @@ def msg_event(sg, evn, t, p):
     name = 'ШОРТ' if sg['dir'] == 'S' else 'ЛОНГ'
     if evn == 'FILLED': return 'GOLD ORDER FILLED', f"ЗЛАТО {name}: цената докосна входа {px(sg['entry'])} ({bg(t)} БГ) - сделката е отворена (ако поръчката ти е влязла). Стоп {px(sg['stop'])}, цел {px(sg['tp'])}."
     if evn == 'TP': return 'GOLD TARGET HIT', f"ЗЛАТО {name}: ЦЕЛТА {px(sg['tp'])} е достигната ({bg(t)} БГ). Печалба ~${risk * sg['rr']:.0f}. Затвори/провери сделката."
+    if evn == 'BE': return 'GOLD MOVE STOP TO ENTRY', f"ЗЛАТО {name}: цената мина +{BE_R:g}R (~${risk * BE_R:.0f} печалба). ПРЕМЕСТИ СТОПА на входа {px(sg['entry'])} ({bg(t)} БГ). Целта остава {px(sg['tp'])}."
+    if evn == 'STOP_BE': return 'GOLD STOP AT ENTRY', f"ЗЛАТО {name}: стопът на входа е ударен ({bg(t)} БГ) - излизаш на ~$0. Преместването на стопа е свършило работа."
     if evn == 'STOP': return 'GOLD STOP HIT', f"ЗЛАТО {name}: СТОП {px(sg['stop'])} е ударен ({bg(t)} БГ). Загуба ~${risk:.0f}."
     if evn == 'CANCEL_TARGET': return 'GOLD CANCEL ORDER', f"ЗЛАТО {name}: цената стигна целта без да влезе. ИЗТРИЙ лимитната поръчка ({px(sg['entry'])})."
     if evn == 'CANCEL_EXPIRED': return 'GOLD CANCEL ORDER', f"ЗЛАТО {name}: 60 минути минаха, поръчката не е влязла. ИЗТРИЙ лимитната поръчка ({px(sg['entry'])})."
