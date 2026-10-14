@@ -1,0 +1,26 @@
+name: gold
+on:
+  schedule:
+    - cron: '50 11 * * 1-5'
+    - cron: '35 17 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: gold
+  cancel-in-progress: false
+jobs:
+  gold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Scan loop
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          RISK_USD: '15'
+          GIT_PUSH: '1'
+        run: python gold_scanner.py loop
