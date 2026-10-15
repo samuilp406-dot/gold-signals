@@ -1,3 +1,6 @@
-=== Gold scan 2026-10-15 18:15 UTC ===
-source: hyperliquid PAXG; last closed bar 18:14 UTC close 4,156.60
-L open entry 4,150.55 stop 4,150.55 tp 4,159.60
+=== Gold scan 2026-10-15 18:29 UTC ===
+source: hyperliquid PAXG; last closed bar 18:28 UTC close 4,159.70
+no active setups
+
+*** ALERTS ***
+GOLD TARGET HIT: ЗЛАТО ЛОНГ: ЦЕЛТА 4,159.60 е достигната (21:28 БГ). Печалба ~$31. Затвори/провери сделката.
