@@ -1,4 +1,4 @@
-=== Gold scan 2026-10-21 15:41 UTC ===
-source: hyperliquid PAXG; last closed bar 15:40 UTC close 4,139.40
+=== Gold scan 2026-10-21 15:57 UTC ===
+source: hyperliquid PAXG; last closed bar 15:56 UTC close 4,135.70
 L open entry 4,134.35 stop 4,126.99 tp 4,145.50
 L open entry 4,133.25 stop 4,126.99 tp 4,145.00
