@@ -1,3 +1,3 @@
-=== Gold scan 2026-10-23 13:45 UTC ===
-source: hyperliquid PAXG; last closed bar 13:44 UTC close 4,037.10
+=== Gold scan 2026-10-23 14:01 UTC ===
+source: hyperliquid PAXG; last closed bar 14:00 UTC close 4,034.30
 no active setups
