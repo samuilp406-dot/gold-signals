@@ -1,3 +1,6 @@
-=== Gold scan 2026-10-29 12:36 UTC ===
-source: hyperliquid PAXG; last closed bar 12:35 UTC close 4,029.40
-L pending entry 4,026.35 stop 4,023.70 tp 4,042.80
+=== Gold scan 2026-10-29 12:52 UTC ===
+source: hyperliquid PAXG; last closed bar 12:51 UTC close 4,025.60
+L open entry 4,026.35 stop 4,023.70 tp 4,042.80
+
+*** ALERTS ***
+GOLD ORDER FILLED: ЗЛАТО ЛОНГ: цената докосна входа 4,026.35 (14:51 БГ) - сделката е отворена (ако поръчката ти е влязла). Стоп 4,023.70, цел 4,042.80.
