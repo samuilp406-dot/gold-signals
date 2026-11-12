@@ -1,3 +1,6 @@
-=== Gold scan 2026-11-12 23:40 UTC ===
-source: hyperliquid PAXG; last closed bar 23:39 UTC close 3,876.30
-L open entry 3,863.00 stop 3,851.31 tp 3,905.00
+=== Gold scan 2026-11-12 23:50 UTC ===
+source: hyperliquid PAXG; last closed bar 23:49 UTC close 3,881.10
+no active setups
+
+*** ALERTS ***
+GOLD CLOSE TRADE: ЗЛАТО ЛОНГ: 8 часа от влизането. Затвори сделката на пазара (~3,881.10).
