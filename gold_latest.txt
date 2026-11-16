@@ -1,3 +1,6 @@
-=== Gold scan 2026-11-13 23:55 UTC ===
-source: hyperliquid PAXG; last closed bar 23:53 UTC close 3,876.60
-L open entry 3,868.85 stop 3,858.41 tp 3,890.00
+=== Gold scan 2026-11-16 21:15 UTC ===
+source: hyperliquid PAXG; last closed bar 21:14 UTC close 3,840.50
+no active setups
+
+*** ALERTS ***
+GOLD STOP HIT: ЗЛАТО ЛОНГ: СТОП 3,858.41 е ударен (14:55 БГ). Загуба ~$15.
