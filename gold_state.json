@@ -67,7 +67,24 @@
    "be": false,
    "notified": false,
    "created": 1794945686
+  },
+  "1795003200000": {
+   "key": "1795003200000",
+   "dir": "S",
+   "entry": 3767.85,
+   "stop": 3782.6883925,
+   "tp": 3736.9,
+   "rr": 2.0858054536567376,
+   "k_ts": 1795012320000,
+   "status": "closed",
+   "checked": 1795015920000,
+   "fill_t": 0,
+   "result": "cancel_expired",
+   "risk": 14.838392500000282,
+   "be": false,
+   "notified": false,
+   "created": 1795030651
   }
  },
- "_hb": "2026-11-17"
+ "_hb": "2026-11-18"
 }
